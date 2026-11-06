@@ -243,6 +243,40 @@ void Aip33628Panel::dump_config() {
 // the pair from 28.0us to 6.4us. The AiP33628 accepts 30MHz and asks for
 // 16ns of CLK high and low, and a store to the GPIO port costs more than
 // that on its own, so the loop needs no padding.
+
+// void IRAM_ATTR Aip33628Panel::send_pair_(uint16_t ss1, uint16_t ss2, uint8_t cs, uint8_t is) {
+//   const uint32_t wire = (uint32_t) IS_WIRE[is & 0xF] << 24;
+//   uint32_t f1 = (uint32_t) ss1 | ((uint32_t) cs << 16) | wire;
+//   uint32_t f2 = (uint32_t) ss2 | ((uint32_t) cs << 16) | wire;
+//   const uint32_t clks = clk_mask_ | clk2_mask_;
+//   const uint32_t dats = data_mask_ | data2_mask_;
+
+//   GPIO.out_w1tc = clks | dats;
+
+//   for (int i = 0; i < 30; i++) {
+//     uint32_t set = 0;
+//     if (f1 & 1)
+//       set |= data_mask_;
+//     if (f2 & 1)
+//       set |= data2_mask_;
+//     f1 >>= 1;
+//     f2 >>= 1;
+//     // Data settles while CLK is low, then one rising edge shifts both buses.
+//     GPIO.out_w1tc = dats & ~set;
+//     GPIO.out_w1ts = set;
+//     GPIO.out_w1ts = clks;
+//     if (i < 29)
+//       GPIO.out_w1tc = clks;
+//   }
+
+//   // CLK is still high after bit 29. A DATA rising edge here is the latch.
+//   GPIO.out_w1tc = dats;
+//   GPIO.out_w1ts = dats;
+//   GPIO.out_w1tc = dats;
+//   GPIO.out_w1tc = clks;
+// }
+
+//Replaced function to work with ESP32-C3 and other variants
 void IRAM_ATTR Aip33628Panel::send_pair_(uint16_t ss1, uint16_t ss2, uint8_t cs, uint8_t is) {
   const uint32_t wire = (uint32_t) IS_WIRE[is & 0xF] << 24;
   uint32_t f1 = (uint32_t) ss1 | ((uint32_t) cs << 16) | wire;
@@ -250,7 +284,7 @@ void IRAM_ATTR Aip33628Panel::send_pair_(uint16_t ss1, uint16_t ss2, uint8_t cs,
   const uint32_t clks = clk_mask_ | clk2_mask_;
   const uint32_t dats = data_mask_ | data2_mask_;
 
-  GPIO.out_w1tc = clks | dats;
+  GPIO.out_w1tc.val = clks | dats;
 
   for (int i = 0; i < 30; i++) {
     uint32_t set = 0;
@@ -260,20 +294,23 @@ void IRAM_ATTR Aip33628Panel::send_pair_(uint16_t ss1, uint16_t ss2, uint8_t cs,
       set |= data2_mask_;
     f1 >>= 1;
     f2 >>= 1;
+
     // Data settles while CLK is low, then one rising edge shifts both buses.
-    GPIO.out_w1tc = dats & ~set;
-    GPIO.out_w1ts = set;
-    GPIO.out_w1ts = clks;
+    GPIO.out_w1tc.val = dats & ~set;
+    GPIO.out_w1ts.val = set;
+    GPIO.out_w1ts.val = clks;
+
     if (i < 29)
-      GPIO.out_w1tc = clks;
+      GPIO.out_w1tc.val = clks;
   }
 
   // CLK is still high after bit 29. A DATA rising edge here is the latch.
-  GPIO.out_w1tc = dats;
-  GPIO.out_w1ts = dats;
-  GPIO.out_w1tc = dats;
-  GPIO.out_w1tc = clks;
+  GPIO.out_w1tc.val = dats;
+  GPIO.out_w1ts.val = dats;
+  GPIO.out_w1tc.val = dats;
+  GPIO.out_w1tc.val = clks;
 }
+
 
 // Walk the schedule the renderer built. The timer runs at a fixed UNIT_US
 // and this counts ticks, rather than reprogramming the alarm per step.
@@ -928,4 +965,4 @@ void Aip33628Panel::render_() {
 
 }  // namespace aip33628
 }  // namespace esphome
-
+
